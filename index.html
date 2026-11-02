@@ -59,6 +59,7 @@ footer p{margin:2px 0}footer .rule{height:1px;background:var(--gold);margin:16px
 .back{background:none;border:0;color:var(--maroon);font:600 14px Poppins;padding:8px 0}
 .cf canvas{width:100%;height:auto;border:1px solid var(--gold);border-radius:8px;display:block;margin-top:8px}
 .btn2{width:100%;margin-top:10px;background:var(--aub);color:var(--cream);border:1.5px solid var(--lgold);border-radius:10px;padding:13px;font:600 15px Poppins}
+.okb{background:#2e7d32;color:#fff;text-align:center;border-radius:8px;padding:8px;font-weight:600;margin-top:10px}.okm{text-align:center;color:var(--maroon)}.osum{font-size:13px;border:1px solid var(--gold);border-radius:8px;padding:8px 10px;margin:8px 0}.osum div{display:flex;justify-content:space-between;gap:8px;padding:2px 0}.osum .t{font-weight:700;border-top:1px solid var(--gold);margin-top:4px;padding-top:4px}.errm{color:var(--brick);font-size:14px}#cf .btn2{display:block;width:100%;margin-top:8px}
 .prov{font-size:12px;color:var(--brick);text-align:center}
 [hidden]{display:none!important}
 .phw{position:relative}.ill{position:absolute;right:6px;bottom:6px;background:#1a0a1b99;color:#f3e8db;font-size:10px;line-height:1;padding:3px 6px;border-radius:3px;letter-spacing:.02em;pointer-events:none}
@@ -101,10 +102,9 @@ footer p{margin:2px 0}footer .rule{height:1px;background:var(--gold);margin:16px
 <label class="req">Pickup date <i>*</i><input id="pd" type="date"></label><div class="hint" style="font-size:12px;color:var(--slate)">Pickup: same day onwards (today allowed).</div><div class="err" id="e_pd"></div></div>
 <label>Notes / customisation<textarea id="cx" rows="2"></textarea></label>
 <label>Salesperson (optional)<input id="sp" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Name of salesperson, if any"></label>
-<button class="wa" type="submit" id="po">Place order on WhatsApp</button><button type="button" class="back" onclick="showStep('v1')">← Back to cart</button>
-<p style="font-size:12px;color:var(--slate)">Delivery charges, if any, and payment will be confirmed on WhatsApp. No online payment.</p></form>
-<div id="cf" class="cf" hidden><h3>Order <span id="ono"></span></h3><div class="prov" id="oprov"></div><canvas id="cv" width="1080" height="1350"></canvas>
-<button class="wa" onclick="sendWA()">Send order on WhatsApp</button><button class="btn2" onclick="dlImg()">Download image</button><button class="btn2" id="shb" onclick="shareImg()" hidden>Share image</button><button type="button" class="back" onclick="showStep('ck')">← Edit details</button></div>
+<button class="wa" type="submit" id="po">Place order</button><button type="button" class="back" onclick="showStep('v1')">← Back to cart</button>
+<p style="font-size:12px;color:var(--slate)">Your order is sent straight to the shop – no WhatsApp needed. Delivery charges, if any, and payment will be confirmed by our team. No online payment.</p></form>
+<div id="cf" class="cf" hidden><div id="cfok"><div class="okb">✓ Order placed</div><h3>Order <span id="ono"></span></h3><p class="okm"><b>Thank you! Our team will confirm your order shortly.</b></p><div id="osum" class="osum"></div><canvas id="cv" width="1080" height="1350"></canvas><button class="btn2" onclick="dlImg()">Download image</button><button class="btn2" id="shb" onclick="shareImg()" hidden>Share image</button><button type="button" class="btn2" id="wacopy" onclick="sendWA()">Send a copy on WhatsApp (optional)</button><button type="button" class="back" onclick="newOrder()">Start a new order</button></div><div id="cferr" hidden><h3>Order not sent yet</h3><p class="errm" id="errmsg">We could not reach the shop just now. Your cart and details are saved on this device – nothing is lost.</p><button class="wa" id="rty" onclick="retryOrder()">Try again</button><button type="button" class="btn2" id="wafb" onclick="sendWA()">Send order on WhatsApp instead</button><button type="button" class="back" onclick="showStep('ck')">← Edit details</button></div></div>
 </div></div></div>
 <script>
 // ====== EDIT HERE ======
@@ -219,16 +219,35 @@ function custData(){const t=id=>$("#"+id).value.trim();const addr=otype=="delive
  return {name:t("cn"),phone:normPhone(t("cp")),type:otype=="delivery"?"Home delivery":"Pickup from outlet",address:addr,city:otype=="delivery"?t("cc"):"",date:otype=="delivery"?t("dd"):t("pd"),dateLabel:fmtD(otype=="delivery"?t("dd"):t("pd")),notes:t("cx"),salesperson:t("sp").replace(/\s+/g," ").slice(0,40).trim()}}
 function localNo(){const d=new Date(),ds=String(d.getDate()).padStart(2,"0")+String(d.getMonth()+1).padStart(2,"0")+String(d.getFullYear()).slice(2);
  const k="gk_seq_"+ds,n=(+localStorage.getItem(k)||0)+1;localStorage.setItem(k,n);return "GK-"+ds+"-"+String(n).padStart(4,"0")}
-async function getOrderNo(payload){if(!ORDER_API_URL)return null;const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),15000);
- try{const r=await fetch(ORDER_API_URL,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload),signal:ac.signal});const j=await r.json();return j&&j.orderNo||null}catch(e){return null}finally{clearTimeout(tm)}}
-async function placeOrder(e){e&&e.preventDefault();if(!cart.length)return alert("Cart is empty");if(!validate())return;saveCust();
- const btn=$("#po");btn.disabled=true;btn.textContent="Placing order…";const c=custData(),ts=new Date();
- const payload={...c,items:cart.map(l=>l.pc?({name:l.name,desc:desc(l)+" (price TBC)",unitWeight:"pcs (price TBC)",qty:l.q,rate:0,unit:"pcs",amount:0}):({name:l.name,desc:desc(l),unitWeight:l.unit=="kg"?wlabel(l.g):l.unit,qty:l.q,rate:l.p,unit:l.unit,amount:Math.round(lineTotal(l))})),subtotal:subtotal(),gst:gstOf(total()),gstRate:5,total:total(),timestamp:ts.toISOString()};
- let no=await getOrderNo(payload),prov=false;if(!no){no=localNo();prov=true}
- ORDER={no,prov,c,ts,lines:cart.map(l=>({name:l.name,d:desc(l),a:lineTotal(l),pc:!!l.pc})),pcN:pcN(),onlyPc:onlyPc(),subtotal:subtotal(),gst:gstOf(total()),total:total()};
- btn.disabled=false;btn.textContent="Place order on WhatsApp";$("#ono").textContent=no;$("#oprov").textContent=prov?"Provisional number – the shop will confirm on WhatsApp":"";
- showStep("cf");await drawImg()}
-function buildMessage(){const o=ORDER,c=o.c,L=[(ENV==="test"?"[TEST] ":"")+"*New Order – House of Seerbakshanam GK*","*Order No: "+o.no+"*"+(o.prov?" (provisional)":""),""];
+const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+const newReqId=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,12));
+let REQ=null,SENDING=false,PENDING=null; // REQ={id,sig}: same order content => same requestId, so a retry/double tap never creates a 2nd order
+// returns {orderNo} on success, {error} on failure (network, timeout, bad JSON or ok:false)
+async function postOrder(payload){if(!ORDER_API_URL)return {error:"Order service not configured"};const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),20000);
+ try{const r=await fetch(ORDER_API_URL,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload),signal:ac.signal});const j=await r.json();return j&&j.ok&&j.orderNo?{orderNo:j.orderNo}:{error:(j&&j.error)||"Order not accepted"}}catch(e){return {error:e&&e.name=="AbortError"?"Timed out":"Network error"}}finally{clearTimeout(tm)}}
+function buildPayload(){const c=custData();
+ const items=cart.map(l=>l.pc?({name:l.name,desc:desc(l)+" (price TBC)",unitWeight:"pcs (price TBC)",qty:l.q,rate:0,unit:"pcs",amount:0}):({name:l.name,desc:desc(l),unitWeight:l.unit=="kg"?wlabel(l.g):l.unit,qty:l.q,rate:l.p,unit:l.unit,amount:Math.round(lineTotal(l))}));
+ const body={...c,items,subtotal:subtotal(),gst:gstOf(total()),gstRate:5,total:total()};const sig=JSON.stringify(body);
+ if(!REQ||REQ.sig!==sig)REQ={id:newReqId(),sig};
+ return {c,payload:{...body,env:ENV,requestId:REQ.id,timestamp:new Date().toISOString()}}}
+function mkOrder(no,prov,c){return {no,prov,c,ts:new Date(),lines:cart.map(l=>({name:l.name,d:desc(l),a:lineTotal(l),pc:!!l.pc})),pcN:pcN(),onlyPc:onlyPc(),subtotal:subtotal(),gst:gstOf(total()),total:total()}}
+async function placeOrder(e){e&&e.preventDefault();if(SENDING)return;if(!cart.length)return alert("Cart is empty");if(!validate())return;saveCust();
+ PENDING=buildPayload();await submitOrder()}
+async function retryOrder(){if(SENDING||!PENDING)return;PENDING.payload.timestamp=new Date().toISOString();await submitOrder()}
+async function submitOrder(){SENDING=true;const btn=$("#po"),rb=$("#rty");[btn,rb].forEach(b=>{b.disabled=true;b.textContent="Placing order…"});
+ let res;try{res=await postOrder(PENDING.payload)}finally{SENDING=false;btn.disabled=false;btn.textContent="Place order";rb.disabled=false;rb.textContent="Try again"}
+ const c=PENDING.c;
+ if(res.orderNo){ORDER=mkOrder(res.orderNo,false,c);REQ=null;$("#ono").textContent=res.orderNo;$("#cfok").hidden=false;$("#cferr").hidden=true;renderSummary();showStep("cf");
+  try{localStorage.setItem("gk_last_order",JSON.stringify({no:res.orderNo,at:Date.now()}))}catch(x){}await drawImg()}
+ else{ORDER=mkOrder((ORDER&&ORDER.prov&&ORDER.req===PENDING.payload.requestId)?ORDER.no:localNo(),true,c);ORDER.req=PENDING.payload.requestId;
+  $("#errmsg").textContent="We could not reach the shop just now ("+res.error+"). Your cart and details are saved on this device – nothing is lost. Tap Try again, or send the order on WhatsApp instead.";
+  $("#cfok").hidden=true;$("#cferr").hidden=false;showStep("cf")}}
+function renderSummary(){const o=ORDER,c=o.c,R=(k,v,cl)=>`<div${cl?' class="'+cl+'"':""}><span>${esc(k)}</span><span>${esc(v)}</span></div>`;
+ $("#osum").innerHTML=o.lines.map((l,i)=>R((i+1)+". "+l.name+" – "+l.d,l.pc?"Price TBC":inr(l.a))).join("")+
+  R("Basic amount (excl. GST)",o.onlyPc?"—":inr2(o.subtotal),"t")+R("GST 5%",o.onlyPc?"—":inr2(o.gst))+R("Total (incl. GST)",o.onlyPc?"To be confirmed":inr(o.total),"t")+
+  R(c.type=="Home delivery"?"Delivery date":"Pickup date",c.dateLabel)+R(c.type=="Home delivery"?"Address":"Outlet",c.address)+R("Name / Mobile",c.name+" · "+c.phone)}
+function newOrder(){ORDER=null;PENDING=null;REQ=null;cart=[];save();noClear();showStep("v1")}
+function buildMessage(){const o=ORDER,c=o.c,L=[(ENV==="test"?"[TEST] ":"")+"*New Order – House of Seerbakshanam GK*","*Order No: "+o.no+"*"+(o.prov?" (provisional – website could not save it, please record it)":" (already placed on website – copy for reference)"),""];
  o.lines.forEach((l,i)=>L.push(`${i+1}. ${l.name} – ${l.d} – ${l.pc?"price to be confirmed":inr(l.a)}`));
  L.push("","Basic amount (excl. GST): "+(o.onlyPc?"—":inr2(o.subtotal)),"GST 5%: "+(o.onlyPc?"—":inr2(o.gst)),"*Total (incl. GST): "+(o.onlyPc?"To be confirmed":inr(o.total))+"*",...(o.pcN?[`_Excludes ${o.pcN} item(s) priced on confirmation_`]:[]),"","*Customer details*","Name: "+c.name,"Phone: "+c.phone,"Order type: "+c.type,(c.type=="Home delivery"?"Address: ":"Pickup outlet: ")+c.address);
  L.push((c.type=="Home delivery"?"Delivery date: ":"Pickup date: ")+c.dateLabel);if(c.city)L.push("City: "+c.city+(c.city=="Other"?" (delivery date to be confirmed on WhatsApp)":""));if(c.notes)L.push("Notes: "+c.notes);if(c.salesperson)L.push("Salesperson: "+c.salesperson);
